@@ -1,0 +1,134 @@
+import { Router, Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { accountService } from '../services/accountService';
+import { runJimengCommand } from '../utils/cliRunner';
+import { saveTempFile, cleanupTempFile } from '../utils/fileHandler';
+import multer from 'multer';
+import fs from 'fs';
+
+const router = Router();
+const prisma = new PrismaClient();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Re-using the same auth middleware logic (abstract it for brevity)
+const apiKeyAuth = async (req: Request, res: Response, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return res.status(401).json({ error: { message: 'Missing Authorization header' } });
+  const token = authHeader.split(' ')[1];
+  const apiKey = await prisma.apiKey.findUnique({ where: { key: token, isActive: true } });
+  if (!apiKey) return res.status(401).json({ error: { message: 'Invalid API Key' } });
+  (req as any).apiUserId = apiKey.id;
+  next();
+};
+
+/**
+ * 统一分发即梦命令的辅助函数，处理包含临时文件的场景
+ */
+const dispatchJimengTask = async (
+  req: Request, 
+  res: Response, 
+  type: 'text2image' | 'text2video' | 'image2image' | 'image2video',
+  commandBuilder: (tempFilePath: string | null) => string,
+  tempFilePath: string | null = null
+) => {
+    const account = await accountService.getIdleAccount();
+    if (!account) {
+      if (tempFilePath) cleanupTempFile(tempFilePath);
+      return res.status(503).json({ error: { message: 'All Dreamina accounts are busy or out of credits. Please try again later.' } });
+    }
+
+    const command = commandBuilder(tempFilePath);
+    console.log(`[Jimeng Dispatcher] Account: ${account.name} -> Executing: ${command}`);
+    
+    // Create Task record
+    const dbTask = await prisma.task.create({
+      data: {
+        apiKeyId: (req as any).apiUserId,
+        accountId: account.id,
+        type,
+        prompt: req.body.prompt || req.body.messages?.[0]?.content || "Generating from image",
+      }
+    });
+
+    let resultUrl = "";
+    try {
+      const { stdout } = await runJimengCommand(command, account.homeDir);
+      
+      try {
+        const jsonStr = stdout.substring(stdout.indexOf('{'), stdout.lastIndexOf('}') + 1);
+        const result = JSON.parse(jsonStr);
+        if (result.result_json?.videos?.[0]?.video_url) {
+          resultUrl = result.result_json.videos[0].video_url;
+        } else if (result.result_json?.images?.[0]?.image_url) {
+           resultUrl = result.result_json.images[0].image_url;
+        } else {
+          throw new Error("Missing media URL in output JSON");
+        }
+      } catch (parseErr) {
+        const urlMatch = stdout.match(/https:\/\/[^\s"'<>]+\.(mp4|png|jpg|jpeg|webp)(?:\?[^\s"'<>]+)?/i); 
+        if (urlMatch) {
+           resultUrl = urlMatch[0];
+        } else {
+           throw new Error(`Unable to parse result URL from CLI output. Parse Error: ${(parseErr as Error).message}\nRaw Output: ${stdout.substring(0, 500)}`);
+        }
+      }
+
+      await prisma.task.update({
+        where: { id: dbTask.id },
+        data: { status: 'SUCCESS', resultUrl }
+      });
+      
+    } catch (cmdErr: any) {
+      await prisma.task.update({
+         where: { id: dbTask.id },
+         data: { status: 'FAILED', errorMsg: cmdErr.message }
+      });
+      await accountService.releaseAccount(account.id, 'ERROR');
+      if (tempFilePath) cleanupTempFile(tempFilePath);
+      return res.status(500).json({ error: { message: "Jimeng CLI failed: " + cmdErr.message } });
+    }
+
+    await accountService.releaseAccount(account.id, 'IDLE');
+    if (tempFilePath) cleanupTempFile(tempFilePath);
+
+    return res.json({
+      created: Math.floor(Date.now() / 1000),
+      data: [{ url: resultUrl }]
+    });
+};
+
+/**
+ * 带有图片/视频的生成端点 (图生图，图生视频)
+ * 支持 formData ('image' 字段) 或 JSON 的 url/base64
+ */
+router.post('/jimeng/image2video', apiKeyAuth, upload.single('image'), async (req: Request, res: Response) => {
+  try {
+    const prompt = req.body.prompt;
+    if (!prompt) return res.status(400).json({ error: { message: "prompt is required" } });
+    
+    let tempFilePath: string | null = null;
+    
+    // 优先级1: FormData 上传了 buffer 文件
+    if (req.file) {
+      tempFilePath = await saveTempFile(req.file.buffer, '.png'); // default ext
+    } 
+    // 优先级2: JSON 传了 image_url (比如 http://... 或 base64)
+    else if (req.body.image_url) {
+      tempFilePath = await saveTempFile(req.body.image_url);
+    }
+    
+    if (!tempFilePath) return res.status(400).json({ error: { message: "An input image is required for image2video" } });
+
+    // 转化为 CLI 指令
+    const cmdBuilder = (localPath: string | null) => 
+        `dreamina image2video --image "${localPath}" --prompt="${prompt}" --duration=5 --poll=300`;
+
+    return await dispatchJimengTask(req, res, 'image2video', cmdBuilder, tempFilePath);
+
+  } catch (err: any) {
+    return res.status(500).json({ error: { message: err.message } });
+  }
+});
+
+// Replace exported default router
+export default router;

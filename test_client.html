@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>即梦 (Jimeng) 全能 API 测试台 v3.1</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <style>
+    [v-cloak] { display: none; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #0d1117; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #484f58; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen p-4 md:p-6 text-gray-800 font-sans">
+<div id="app" v-cloak class="max-w-7xl mx-auto">
+  <div class="mb-6 bg-white p-6 rounded-2xl shadow border border-gray-200">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-extrabold text-indigo-700 flex items-center gap-3">
+          <i class="fa-solid fa-layer-group text-indigo-500"></i> 即梦 API 验证终端
+        </h1>
+        <p class="text-gray-500 mt-2 text-sm">完全适配 Jimeng CLI 真实模型参数链路：已支持全能参考（图片/视频/音频多模态）。</p>
+        <div class="mt-3">
+          <button @click="showDocs = true" class="text-xs bg-indigo-100 text-indigo-800 hover:bg-indigo-200 px-3 py-1.5 rounded-md font-bold transition flex items-center gap-2 border border-indigo-200 shadow-sm">
+            <i class="fa-solid fa-book-open text-indigo-600"></i> 查看开发者 API 集成文档
+          </button>
+        </div>
+      </div>
+      <div class="flex gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1">Base URL</label>
+          <input v-model="config.baseUrl" type="text" class="w-48 border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1">API Key</label>
+          <input v-model="config.apiKey" type="password" placeholder="sk-jm-..." class="w-48 border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    
+    <!-- 左侧控制面板 -->
+    <div class="lg:col-span-5 space-y-4">
+      
+      <!-- 核心选择区 -->
+      <div class="bg-white rounded-2xl shadow border border-gray-200 overflow-hidden">
+        <div class="flex border-b border-gray-200">
+          <button @click="task.mode = 'image'" :class="task.mode === 'image' ? 'bg-indigo-50 text-indigo-700 border-b-2 border-indigo-600 font-bold' : 'text-gray-500 hover:bg-gray-50'" class="flex-1 py-4 text-center transition">
+            <i class="fa-solid fa-image"></i> 图片创作
+          </button>
+          <button @click="task.mode = 'video'" :class="task.mode === 'video' ? 'bg-blue-50 text-blue-700 border-b-2 border-blue-600 font-bold' : 'text-gray-500 hover:bg-gray-50'" class="flex-1 py-4 text-center transition">
+            <i class="fa-solid fa-video"></i> 视频创作
+          </button>
+        </div>
+
+        <div class="p-5 space-y-5">
+          <!-- 附件区 -->
+          <div class="bg-gray-50 p-4 rounded-xl border-2 border-dashed border-gray-300 relative transition hover:border-indigo-400">
+            <div class="flex justify-between items-center mb-2">
+              <label class="text-sm font-bold text-gray-700">📎 附加参考媒体</label>
+              <button v-if="hasAnyFile" @click="clearFiles" class="text-xs text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i> 清空所有附件</button>
+            </div>
+            
+            <p class="text-xs text-gray-500 mb-3 leading-relaxed">
+              <template v-if="task.mode === 'image'">
+                💡 上传即切换为【图生图】。支持4.0以上模型。最多支持 10 张图片。
+              </template>
+              <template v-else>
+                💡 不上传为【文生视频】；上传1张图片为【图生视频】；上传多张突破或带音视频将切换至【全能多模态】(限 Seedance 2.0)。
+              </template>
+            </p>
+            
+            <!-- 图片上传 -->
+            <div class="mb-3">
+              <label class="text-xs font-bold text-gray-600">
+                <i class="fa-regular fa-image"></i> 参考图 ({{ task.mode === 'image' ? '0/10' : '0/9' }})
+              </label>
+              
+              <!-- 拖拽上传区域 -->
+              <div 
+                @dragover.prevent="isDraggingImage = true"
+                @dragleave.prevent="isDraggingImage = false"
+                @drop.prevent="handleDrop($event, 'image')"
+                :class="isDraggingImage ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 bg-white hover:border-indigo-400'"
+                class="mt-1 flex flex-col items-center justify-center w-full py-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors"
+                @click="$refs.imageInput.click()"
+              >
+                <i class="fa-solid fa-cloud-arrow-up text-2xl text-indigo-400 mb-1"></i>
+                <p class="text-[11px] text-gray-500 font-medium">点击选择或拖拽图片至此 (支持多选)</p>
+                <input type="file" ref="imageInput" multiple accept="image/*" @change="handleFileChange($event, 'image')" class="hidden">
+              </div>
+
+              <!-- 小四方图预览 -->
+              <div v-if="task.files.image.length" class="mt-3 flex gap-2 flex-wrap">
+                <div v-for="(f, i) in task.files.image" :key="i" class="relative group w-14 h-14 rounded-lg shadow-sm border border-gray-200 overflow-hidden bg-gray-100 flex-shrink-0 cursor-default" @click.stop>
+                  <img :src="f.previewUrl" class="w-full h-full object-cover object-center" />
+                  <button @click.prevent.stop="removeFile('image', i)" class="absolute top-0 right-0 bg-white/90 text-gray-700 hover:text-white hover:bg-red-500 w-5 h-5 rounded-bl-lg flex items-center justify-center text-[10px] transition-all opacity-0 group-hover:opacity-100 shadow">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                  <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[8px] px-1 py-[2px] truncate text-center" :title="f.name">
+                    {{ f.name }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 视频传 (仅视频模式) -->
+            <div v-if="task.mode === 'video'" class="mb-3">
+              <label class="text-xs font-bold text-gray-600">
+                <i class="fa-solid fa-film"></i> 参考视频 (0/3)
+              </label>
+              <input type="file" ref="videoInput" multiple accept="video/*" @change="handleFileChange($event, 'video')" class="w-full text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200 cursor-pointer mt-1">
+              <div v-if="task.files.video.length" class="mt-2 flex gap-2 flex-wrap">
+                <span v-for="(f, i) in task.files.video" :key="i" class="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-[10px] px-2 py-1 rounded-md border border-blue-200">
+                  <span class="truncate max-w-[100px]" :title="f.name">{{ f.name }}</span>
+                  <button @click.prevent="removeFile('video', i)" class="text-blue-400 hover:text-red-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+              </div>
+            </div>
+            
+            <!-- 音频传 (仅视频模式) -->
+            <div v-if="task.mode === 'video'">
+              <label class="text-xs font-bold text-gray-600">
+                <i class="fa-solid fa-music"></i> 垫音配乐 (0/3) 4-15秒
+              </label>
+              <input type="file" ref="audioInput" multiple accept="audio/*" @change="handleFileChange($event, 'audio')" class="w-full text-sm text-gray-600 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-purple-100 file:text-purple-700 hover:file:bg-purple-200 cursor-pointer mt-1">
+              <div v-if="task.files.audio.length" class="mt-2 flex gap-2 flex-wrap">
+                <span v-for="(f, i) in task.files.audio" :key="i" class="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-[10px] px-2 py-1 rounded-md border border-purple-200">
+                  <span class="truncate max-w-[100px]" :title="f.name">{{ f.name }}</span>
+                  <button @click.prevent="removeFile('audio', i)" class="text-purple-400 hover:text-red-500 ml-1"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+              </div>
+            </div>
+
+            <!-- Warning -->
+            <div v-if="task.errorMsg" class="mt-2 text-xs text-red-500 font-medium bg-red-50 p-2 rounded border border-red-100">
+              <i class="fa-solid fa-circle-exclamation"></i> {{ task.errorMsg }}
+            </div>
+            <!-- API Mode Indicator -->
+            <div class="mt-2 text-[10px] font-bold px-2 py-1 rounded w-fit" :class="apiModeTag.class">
+              {{ apiModeTag.text }}
+            </div>
+          </div>
+
+          <!-- 模型选择 (动态) -->
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">🧠 底层引擎模型 (Model)</label>
+            <select v-model="task.model" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+              <option v-for="m in availableModels" :key="m" :value="m">{{ m }} {{ getModelTags(m) }}</option>
+            </select>
+          </div>
+
+          <!-- 分辨率 (针对图片的 Resolution Type) 或者 (视频的 Video Resolution) -->
+          <div class="grid grid-cols-2 gap-4">
+            <div v-if="task.mode === 'image' || (task.mode === 'video' && availableVideoResolutions.length > 0)">
+              <label class="block text-sm font-bold text-gray-700 mb-1">
+                高清质量 (Resolution)
+              </label>
+              <select v-model="task.resolution" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none">
+                <option v-for="r in (task.mode === 'image' ? availableImageResolutions : availableVideoResolutions)" :key="r" :value="r">{{ r }}</option>
+              </select>
+            </div>
+            
+            <!-- 画幅比例 -->
+            <div v-if="showRatioControl">
+              <label class="block text-sm font-bold text-gray-700 mb-1">画幅比例 (Ratio)</label>
+              <select v-model="task.ratio" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2.5 text-sm outline-none">
+                <option v-for="r in availableRatios" :key="r" :value="r">{{ r }}</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 时长 (针对视频) -->
+          <div v-if="task.mode === 'video'">
+            <label class="block text-sm font-bold text-gray-700 mb-1 flex justify-between">
+              <span>视频生成时长 (Duration)</span>
+              <span class="text-blue-600 font-bold bg-blue-100 px-2 rounded-lg">{{ task.duration }} 秒</span>
+            </label>
+            <input type="range" v-model.number="task.duration" :min="durationLimits.min" :max="durationLimits.max" class="w-full accent-blue-600">
+            <div class="flex justify-between text-[11px] text-gray-400 mt-1">
+              <span>{{ durationLimits.min }}s</span>
+              <span>{{ durationLimits.max }}s</span>
+            </div>
+          </div>
+
+          <!-- 提示词 -->
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1">咒语引导 (Prompt)</label>
+            <textarea v-model="task.prompt" rows="3" class="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="输入画面描述，例如：一只有着星空双眸的白猫..."></textarea>
+          </div>
+
+          <!-- 提交区 -->
+          <button @click="submit" :disabled="loading || !!task.errorMsg" class="w-full bg-slate-900 hover:bg-black disabled:bg-gray-400 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 transform active:scale-[0.98]">
+            <template v-if="loading">
+              <i class="fa-solid fa-circle-notch fa-spin"></i> API 联调中... 
+            </template>
+            <template v-else>
+              <i class="fa-solid fa-paper-plane"></i> 下发生成指令
+            </template>
+          </button>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧结果 & Console -->
+    <div class="lg:col-span-7 flex flex-col gap-4">
+      
+      <!-- 媒体展柜 -->
+      <div class="bg-white rounded-2xl shadow border border-gray-200 flex flex-col h-[520px] relative overflow-hidden group">
+        <div class="absolute top-0 w-full bg-gradient-to-b from-black/50 to-transparent p-4 z-10 opaitcy-0 group-hover:opacity-100 transition-opacity">
+           <h2 class="text-white font-bold text-sm drop-shadow-md"><i class="fa-solid fa-tv"></i> 媒体展柜区</h2>
+        </div>
+        
+        <div class="flex-1 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-gray-100 flex items-center justify-center p-2 relative">
+          
+          <div v-if="!result && !loading" class="text-center text-gray-400">
+            <i class="fa-solid fa-film text-4xl mb-3 opacity-30"></i>
+            <p class="text-sm font-medium">配置左侧参数后，一键生成属于你的作品。</p>
+          </div>
+
+          <div v-if="loading" class="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center z-20">
+            <div class="relative">
+              <div class="w-20 h-20 border-4 border-indigo-100 rounded-full"></div>
+              <div class="w-20 h-20 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+              <div class="absolute inset-0 flex items-center justify-center text-xs font-bold text-indigo-600">{{ seconds }}s</div>
+            </div>
+            <p class="text-gray-700 font-bold mt-4">即梦大模型生成中...</p>
+            <p class="text-xs text-gray-500 mt-1">服务器已挂起进程等待回调</p>
+          </div>
+
+          <div v-if="result" class="w-full h-full flex items-center justify-center p-4">
+            <template v-if="resultType === 'video'">
+              <video :src="result" controls autoplay loop class="h-full object-contain rounded-lg shadow-xl ring-1 ring-gray-900/10"></video>
+            </template>
+            <template v-else>
+              <img :src="result" class="h-full object-contain rounded-lg shadow-xl ring-1 ring-gray-900/10 cursor-pointer hover:scale-[1.02] transition-transform" @click="window.open(result, '_blank')"/>
+            </template>
+          </div>
+
+        </div>
+
+        <!-- 展柜底部动作拦 -->
+        <div v-if="result" class="bg-white border-t border-gray-200 p-3 flex justify-between items-center z-10">
+           <span class="text-xs text-gray-500 select-all max-w-[60%] truncate" :title="result">{{ result }}</span>
+           <a :href="result" download target="_blank" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-1.5 rounded-lg transition"><i class="fa-solid fa-download"></i> 下载媒体</a>
+        </div>
+      </div>
+
+      <!-- JSON/Debug 控制台 -->
+      <div class="bg-[#0d1117] rounded-2xl shadow-lg border border-gray-800 p-4 relative flex-1 min-h-[160px] flex flex-col">
+        <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
+          <span><i class="fa-solid fa-terminal text-green-500"></i> 系统通信日志分析台</span>
+          <button @click="debugConsole = ''" class="hover:text-white transition"><i class="fa-solid fa-eraser"></i></button>
+        </h3>
+        <pre class="text-[11px] font-mono text-green-400 overflow-x-auto overflow-y-auto flex-1 custom-scrollbar leading-relaxed whitespace-pre-wrap">{{ debugConsole || 'Waiting for connection...' }}</pre>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Developer API Documentation Modal -->
+  <div v-if="showDocs" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/80 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col transform transition-all">
+      <div class="p-5 sm:p-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+        <h2 class="text-xl sm:text-2xl font-extrabold text-gray-800 flex items-center gap-3">
+          <i class="fa-solid fa-book-open text-indigo-600"></i> 开发者 API 集成文档
+        </h2>
+        <button @click="showDocs = false" class="text-gray-400 hover:text-gray-800 text-2xl transition outline-none"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-5 sm:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-8 bg-white">
+
+        <!-- 0. Get API Key -->
+        <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
+          <h3 class="font-bold text-amber-900 mb-2"><i class="fa-solid fa-key"></i> 如何获取 API Key</h3>
+          <ol class="text-sm text-amber-800 space-y-1 list-decimal pl-5">
+            <li>联系管理员，进入后台控制台「API 令牌分发」页面</li>
+            <li>管理员填写拥有者标识并点击「签发令牌」</li>
+            <li>令牌签发后<strong>明文显示一次</strong>，需立即复制保存</li>
+            <li>此后令牌脱敏展示，若丢失需删除后重新签发</li>
+          </ol>
+        </div>
+
+        <!-- 1. Base URL & Auth -->
+        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+           <h3 class="font-bold text-blue-800 mb-2"><i class="fa-solid fa-circle-info"></i> 全局规范声明</h3>
+           <div class="text-sm text-blue-700 space-y-2">
+             <p><span class="font-bold">Base URL：</span><code class="bg-blue-100 px-2 py-0.5 rounded font-mono">http://&lt;server-ip&gt;:3000/v1</code></p>
+             <p><span class="font-bold">认证 Header：</span><code class="bg-blue-100 px-2 py-0.5 rounded font-mono">Authorization: Bearer sk-jm-xxxxxxxxxx</code></p>
+             <p><span class="font-bold">请求格式：</span><code class="bg-blue-100 px-2 py-0.5 rounded font-mono">multipart/form-data</code> — 所有生成接口统一使用 form-data，支持文件上传</p>
+             <p><span class="font-bold">任务轮询：</span><code class="bg-blue-100 px-2 py-0.5 rounded font-mono">GET /v1/tasks/:id</code> — 轮询直到 status 为 <code class="bg-blue-100 px-1 rounded">success</code> 或 <code class="bg-blue-100 px-1 rounded">failed</code></p>
+           </div>
+        </div>
+
+        <!-- Async Response Model -->
+        <div class="border border-amber-200 bg-amber-50 rounded-xl p-4">
+          <h3 class="font-bold text-amber-800 mb-3 flex items-center gap-2">
+            <i class="fa-solid fa-arrows-rotate text-amber-600"></i> 异步任务响应机制 (必读)
+          </h3>
+          <p class="text-sm text-amber-700 mb-3">两个生成接口均为<strong>异步非阻塞</strong>：POST 提交后立即返回任务 ID，后台持续执行。客户端需轮询 <code class="bg-amber-100 px-1 rounded font-mono">GET /v1/tasks/:id</code> 取得最终 URL。</p>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div class="bg-white border border-amber-100 rounded-lg p-3">
+              <p class="font-black text-amber-700 uppercase tracking-wider mb-2">① POST 提交 → 立即返回</p>
+              <pre class="font-mono text-gray-700 leading-relaxed">{
+  "id": "clxxxxxxxxxxx",
+  "status": "processing",
+  "submit_id": "abc123"
+}</pre>
+              <p class="text-gray-500 mt-1.5">id 用于后续轮询，submit_id 为 CLI 流水号</p>
+            </div>
+            <div class="bg-white border border-amber-100 rounded-lg p-3">
+              <p class="font-black text-amber-700 uppercase tracking-wider mb-2">② 轮询中 (每 3-5s)</p>
+              <pre class="font-mono text-gray-700 leading-relaxed">{
+  "id": "clxxxxxxxxxxx",
+  "status": "processing"
+}</pre>
+              <p class="text-gray-500 mt-1.5">继续轮询，最长等待约 5 分钟</p>
+            </div>
+            <div class="space-y-2">
+              <div class="bg-white border border-emerald-200 rounded-lg p-3">
+                <p class="font-black text-emerald-700 uppercase tracking-wider mb-1">③a 成功</p>
+                <pre class="font-mono text-gray-700 leading-relaxed text-[10px]">{
+  "id": "clxxx",
+  "status": "success",
+  "data": [{ "url": "https://cdn.xxx/out.jpg" }]
+}</pre>
+              </div>
+              <div class="bg-white border border-red-200 rounded-lg p-3">
+                <p class="font-black text-red-700 uppercase tracking-wider mb-1">③b 失败</p>
+                <pre class="font-mono text-gray-700 leading-relaxed text-[10px]">{
+  "id": "clxxx",
+  "status": "failed",
+  "error": "错误原因说明"
+}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Image -->
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 border-b-2 border-gray-100 pb-2 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-image text-indigo-500"></i> 接口1：图片生成 (POST /v1/images/generations)
+          </h3>
+          <div class="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-sm mb-4 flex items-center gap-2">
+            <span class="bg-blue-600 text-white font-bold text-[10px] px-1.5 py-0.5 rounded">POST</span>
+            {{ config.baseUrl.replace(/\/$/, '') }}/images/generations
+          </div>
+
+          <!-- Image Model Table -->
+          <h4 class="font-bold text-gray-700 text-sm mb-2">📊 各模型参数约束</h4>
+          <div class="overflow-x-auto mb-4">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-indigo-50">
+                  <th class="text-left px-3 py-2 font-bold text-indigo-700 border border-indigo-100">model</th>
+                  <th class="text-left px-3 py-2 font-bold text-indigo-700 border border-indigo-100">resolution_type</th>
+                  <th class="text-left px-3 py-2 font-bold text-indigo-700 border border-indigo-100">ratio</th>
+                  <th class="text-left px-3 py-2 font-bold text-indigo-700 border border-indigo-100">图生图 (images)</th>
+                  <th class="text-left px-3 py-2 font-bold text-indigo-700 border border-indigo-100">备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="hover:bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">5.0</td><td class="px-3 py-2 border border-slate-100">4k / 2k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 最多 10 张</td><td class="px-3 py-2 border border-slate-100 text-indigo-600 font-semibold">旗舰推荐</td></tr>
+                <tr class="hover:bg-slate-50 bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">4.6</td><td class="px-3 py-2 border border-slate-100">4k / 2k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 最多 10 张</td><td class="px-3 py-2 border border-slate-100 text-slate-500">高质量</td></tr>
+                <tr class="hover:bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">4.5</td><td class="px-3 py-2 border border-slate-100">4k / 2k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 最多 10 张</td><td class="px-3 py-2 border border-slate-100 text-slate-500"></td></tr>
+                <tr class="hover:bg-slate-50 bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">4.1</td><td class="px-3 py-2 border border-slate-100">4k / 2k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 最多 10 张</td><td class="px-3 py-2 border border-slate-100 text-slate-500"></td></tr>
+                <tr class="hover:bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">4.0</td><td class="px-3 py-2 border border-slate-100">4k / 2k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 最多 10 张</td><td class="px-3 py-2 border border-slate-100 text-slate-500"></td></tr>
+                <tr class="hover:bg-slate-50 bg-orange-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.1</td><td class="px-3 py-2 border border-slate-100 text-orange-600">2k / 1k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-red-600 font-bold">❌ 不支持</td><td class="px-3 py-2 border border-slate-100 text-orange-600">旧版，降级分辨率</td></tr>
+                <tr class="hover:bg-slate-50 bg-orange-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.0</td><td class="px-3 py-2 border border-slate-100 text-orange-600">2k / 1k</td><td class="px-3 py-2 border border-slate-100">全部比例</td><td class="px-3 py-2 border border-slate-100 text-red-600 font-bold">❌ 不支持</td><td class="px-3 py-2 border border-slate-100 text-orange-600">旧版基础</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 class="font-bold text-gray-700 text-sm mb-3">📝 Form-Data 参数</h4>
+              <ul class="text-sm text-gray-600 space-y-3">
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-24 text-center shrink-0">prompt</code><div><span class="text-red-500 text-[10px] font-bold px-1 border border-red-200 bg-red-50 rounded">*必填</span> 画面描述提示词</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-24 text-center shrink-0">model</code><div>模型版本: 5.0, 4.6, 4.5, 4.1, 4.0, 3.1, 3.0</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-24 text-center shrink-0">ratio</code><div>画幅比例: 16:9, 1:1, 9:16, 4:3, 3:4, 21:9 等</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-24 text-center shrink-0">resolution_type</code><div>分辨率: 4k / 2k (3.x 系最高 2k)</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-24 text-center shrink-0">images</code><div class="text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1.5 rounded-lg w-full"><b>[File Array]</b> 图生图: 上传 1~10 张，仅限 4.0+ 模型</div></li>
+              </ul>
+            </div>
+            <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+              <h4 class="font-bold text-gray-700 text-sm mb-2">cURL 示例</h4>
+              <pre class="text-[11px] font-mono text-gray-700 bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto">curl -X POST {{ config.baseUrl.replace(/\/$/, '') }}/images/generations \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -F "model=5.0" \
+  -F "prompt=一只超写实机械猫咪" \
+  -F "ratio=16:9" \
+  -F "resolution_type=4k"
+
+# 图生图 (4.0+ 限定):
+# 追加 -F "images=@/path/to/ref.jpg"</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Video -->
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 border-b-2 border-gray-100 pb-2 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-video text-blue-500"></i> 接口2：视频创作 (POST /v1/videos/generations)
+          </h3>
+          <div class="bg-gray-900 text-green-400 p-3 rounded-lg font-mono text-sm mb-4 flex gap-2 items-center">
+            <span class="bg-blue-600 text-white font-bold text-[10px] px-1.5 py-0.5 rounded">POST</span>
+            {{ config.baseUrl.replace(/\/$/, '') }}/videos/generations
+          </div>
+
+          <!-- Video Model Table -->
+          <h4 class="font-bold text-gray-700 text-sm mb-2">📊 各模型参数约束</h4>
+          <div class="overflow-x-auto mb-4">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-blue-50">
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">model</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">时长 (s)</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">最高分辨率</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">文生视频</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">图生视频</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">多模态/音频</th>
+                  <th class="text-left px-3 py-2 font-bold text-blue-700 border border-blue-100">备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="bg-green-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">seedance2.0_vip</td><td class="px-3 py-2 border border-slate-100">4–15</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 全支持</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-semibold">VIP 超极速</td></tr>
+                <tr class="bg-green-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">seedance2.0fast_vip</td><td class="px-3 py-2 border border-slate-100">4–15</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 全支持</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-semibold">VIP 极速版</td></tr>
+                <tr><td class="px-3 py-2 font-mono font-bold border border-slate-100">seedance2.0</td><td class="px-3 py-2 border border-slate-100">4–15</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 全支持</td><td class="px-3 py-2 border border-slate-100 text-slate-500">标准推荐</td></tr>
+                <tr class="bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">seedance2.0fast</td><td class="px-3 py-2 border border-slate-100">4–15</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700 font-bold">✅ 全支持</td><td class="px-3 py-2 border border-slate-100 text-slate-500">快速出图</td></tr>
+                <tr class="bg-blue-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.5pro</td><td class="px-3 py-2 border border-slate-100">4–12</td><td class="px-3 py-2 border border-slate-100 font-bold text-blue-700">1080p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-red-500">❌</td><td class="px-3 py-2 border border-slate-100 text-blue-600">高清，无多模态</td></tr>
+                <tr><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.0pro</td><td class="px-3 py-2 border border-slate-100">3–10</td><td class="px-3 py-2 border border-slate-100 font-bold text-blue-700">1080p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-red-500">❌</td><td class="px-3 py-2 border border-slate-100 text-slate-500"></td></tr>
+                <tr class="bg-slate-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.0fast</td><td class="px-3 py-2 border border-slate-100">3–10</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-red-500">❌</td><td class="px-3 py-2 border border-slate-100 text-slate-500">快速版</td></tr>
+                <tr class="bg-orange-50"><td class="px-3 py-2 font-mono font-bold border border-slate-100">3.0</td><td class="px-3 py-2 border border-slate-100">3–10</td><td class="px-3 py-2 border border-slate-100">720p</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-green-700">✅</td><td class="px-3 py-2 border border-slate-100 text-red-500">❌</td><td class="px-3 py-2 border border-slate-100 text-orange-500">旧基础版</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 class="font-bold text-gray-700 text-sm mb-3">📝 Form-Data 参数</h4>
+              <ul class="text-sm text-gray-600 space-y-2 mb-4">
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-20 text-center shrink-0">prompt</code><div><span class="text-red-500 text-[10px] font-bold px-1 border border-red-200 bg-red-50 rounded">*必填</span> 核心描述提示词</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-20 text-center shrink-0">model</code><div>模型名称，见上表</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-20 text-center shrink-0">duration</code><div>时长(整数秒)，范围见上表</div></li>
+                <li class="flex gap-2 items-start"><code class="text-xs bg-gray-100 text-pink-600 py-1 px-1.5 rounded w-20 text-center shrink-0">ratio</code><div>画幅比: 16:9, 9:16, 1:1, 4:3 等</div></li>
+              </ul>
+              <h5 class="text-xs font-bold bg-yellow-100 text-yellow-800 px-2 py-1 rounded inline-block mb-2 border border-yellow-200">多模态文件槽</h5>
+              <ul class="text-xs text-gray-600 space-y-2">
+                <li><code class="bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded">image</code> — 1张=图生视频；≥2张=触发多模态 (限seedance2.0系)</li>
+                <li><code class="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded">video</code> — 0~3个视频文件，存在则触发多模态</li>
+                <li><code class="bg-purple-100 text-purple-700 font-bold px-2 py-0.5 rounded">audio</code> — 0~3首音频，4~15秒，存在则触发多模态</li>
+              </ul>
+            </div>
+            <div class="bg-gray-50 rounded-xl border border-gray-200 p-4">
+              <h4 class="font-bold text-gray-700 text-sm mb-2">cURL 示例</h4>
+              <pre class="text-[10px] font-mono bg-gray-900 text-green-400 p-3 rounded-lg overflow-x-auto leading-relaxed"># 文生视频
+curl -X POST {{ config.baseUrl.replace(/\/$/, '') }}/videos/generations \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -F "model=seedance2.0" \
+  -F "prompt=赛博朋克都市夜景" \
+  -F "duration=5" -F "ratio=16:9"
+
+# 图生视频 (单图定帧)
+curl ... -F "image=@face.jpg"
+
+# 多模态 (多图+音频)
+curl ... -F "image=@face1.jpg" \
+  -F "image=@face2.jpg" \
+  -F "audio=@voice.mp3"</pre>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const { createApp, ref, computed, watch, onMounted } = Vue;
+
+  createApp({
+    setup() {
+      const config = ref({ baseUrl: 'http://localhost:3000/v1', apiKey: '' });
+      const showDocs = ref(false);
+      const task = ref({
+        mode: 'image', // 'image' or 'video'
+        files: { image: [], video: [], audio: [] },
+        model: '5.0',
+        resolution: 'default',
+        ratio: '1:1',
+        duration: 5,
+        prompt: '',
+        errorMsg: ''
+      });
+
+      const imageInput = ref(null);
+      const videoInput = ref(null);
+      const audioInput = ref(null);
+
+      // --- Model Knowledge Base ---
+      const ImageModels = ['5.0', '4.6', '4.5', '4.1', '4.0', '3.1', '3.0'];
+      const VideoModelsObj = {
+        text2video: ['seedance2.0_vip', 'seedance2.0fast_vip', 'seedance2.0', 'seedance2.0fast'],
+        image2video: ['seedance2.0_vip', 'seedance2.0fast_vip', 'seedance2.0', 'seedance2.0fast', '3.5pro', '3.0pro', '3.0fast', '3.0', '3.5_pro', '3.0_pro', '3.0_fast'],
+        multimodal2video: ['seedance2.0_vip', 'seedance2.0fast_vip', 'seedance2.0', 'seedance2.0fast']
+      };
+      
+      const RATIOS = ['21:9', '16:9', '3:2', '4:3', '1:1', '3:4', '2:3', '9:16'];
+      const VIDEO_RATIOS = ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9'];
+
+      // --- Computed Dependencies ---
+      const hasImage = computed(() => task.value.files.image.length > 0);
+      const hasAnyFile = computed(() => task.value.files.image.length > 0 || task.value.files.video.length > 0 || task.value.files.audio.length > 0);
+      
+      const currentApiMode = computed(() => {
+        if (task.value.mode === 'image') return hasImage.value ? 'image2image' : 'text2image';
+        
+        // Video specific mapping
+        const imgCount = task.value.files.image.length;
+        const vidCount = task.value.files.video.length;
+        const audCount = task.value.files.audio.length;
+        
+        if (imgCount > 1 || vidCount > 0 || audCount > 0) return 'multimodal2video';
+        if (imgCount === 1) return 'image2video';
+        return 'text2video';
+      });
+
+      const apiModeTag = computed(() => {
+        const mode = currentApiMode.value;
+        if (mode === 'text2image') return { text: '☁️ 模式: 纯文生图', class: 'bg-indigo-100 text-indigo-700' };
+        if (mode === 'image2image') return { text: '🖼️ 模式: 底图垫入生图', class: 'bg-indigo-200 text-indigo-800' };
+        if (mode === 'text2video') return { text: '☁️ 模式: 纯文生视频', class: 'bg-blue-100 text-blue-700' };
+        if (mode === 'image2video') return { text: '🖼️ 模式: 单图生视频', class: 'bg-blue-200 text-blue-800' };
+        if (mode === 'multimodal2video') return { text: '💥 模式: 全能多模态参考生视频', class: 'bg-purple-100 text-purple-700 border border-purple-300 shadow-sm' };
+        return { text: '', class: '' };
+      });
+
+      const availableModels = computed(() => {
+        if (task.value.mode === 'image') return ImageModels;
+        const mappedMode = currentApiMode.value;
+        return VideoModelsObj[mappedMode];
+      });
+
+      const getModelTags = (m) => {
+        if (m === '5.0') return '旗舰';
+        if (m.includes('seedance2.0')) return m.includes('vip') ? '超极速' : '推荐';
+        if (m === '3.5pro') return '精细画质';
+        return '';
+      };
+
+      const availableImageResolutions = computed(() => {
+        const m = task.value.model;
+        if (m === '3.0' || m === '3.1') return ['2k', '1k'];
+        return ['4k', '2k'];
+      });
+
+      const availableVideoResolutions = computed(() => {
+        const m = task.value.model;
+        if (m.includes('seedance')) return ['720p'];
+        if (m === '3.0pro') return ['1080p'];
+        return ['720p', '1080p'];
+      });
+
+      const availableRatios = computed(() => {
+         return task.value.mode === 'image' ? RATIOS : VIDEO_RATIOS;
+      });
+
+      const showRatioControl = computed(() => {
+         // image2video has NO ratio control. text2video, multimodal and all image modes have it.
+         return currentApiMode.value !== 'image2video';
+      });
+
+      const durationLimits = computed(() => {
+         const m = task.value.model;
+         if (m.includes('seedance')) return { min: 4, max: 15 };
+         if (m.includes('3.5')) return { min: 4, max: 12 };
+         return { min: 3, max: 10 }; // 3.0 
+      });
+
+      // --- Watchers for Constraint Enforcement ---
+      watch(() => task.value.mode, (n) => {
+        task.value.model = availableModels.value[0];
+        task.value.resolution = 'default';
+        if (n === 'image') {
+           task.value.ratio = availableRatios.value[0];
+           // Only images are allowed in image mode
+           task.value.files.video = [];
+           task.value.files.audio = [];
+        }
+      });
+
+      watch(currentApiMode, () => {
+         // Re-clamp model list when attachment state heavily changes
+         if (!availableModels.value.includes(task.value.model)) {
+            task.value.model = availableModels.value[0];
+         }
+      });
+
+      // Constraints Validation on Form Edit
+      watch(task, () => {
+        task.value.errorMsg = '';
+        if (currentApiMode.value === 'image2image') {
+          if (['3.0', '3.1'].includes(task.value.model)) {
+            task.value.errorMsg = '模型 3.0 / 3.1 不支持附加参考图 (image2image)。请选择 4.0 以上底层。';
+          }
+        }
+      }, { deep: true });
+
+      watch(() => task.value.model, (m) => {
+        task.value.resolution = 'default';
+        if (task.value.mode === 'video') {
+           const lim = durationLimits.value;
+           if (task.value.duration < lim.min) task.value.duration = lim.min;
+           if (task.value.duration > lim.max) task.value.duration = lim.max;
+        }
+      });
+
+      // --- Actions ---
+      const isDraggingImage = ref(false);
+
+      const processFiles = (inputFiles, type) => {
+        task.value.errorMsg = '';
+        if (!inputFiles.length) return;
+        
+        let validFiles = [];
+        for (let f of inputFiles) {
+           if (!f.type.startsWith(type + '/')) {
+              task.value.errorMsg = `只能在此通道上传 ${type} 格式的文件！`;
+              break;
+           }
+           if (type === 'image') {
+              f.previewUrl = URL.createObjectURL(f);
+           }
+           validFiles.push(f);
+        }
+        
+        let maxCount = type === 'image' ? (task.value.mode === 'image' ? 10 : 9) : 3;
+        let combined = [...task.value.files[type], ...validFiles];
+        
+        if (combined.length > maxCount) {
+           combined = combined.slice(0, maxCount);
+           task.value.errorMsg = `超过物理最大限制，已截取前 ${maxCount} 个附件。`;
+        }
+        task.value.files[type] = combined;
+      };
+
+      const handleDrop = (e, type) => {
+         if (type === 'image') isDraggingImage.value = false;
+         if (e.dataTransfer.files) {
+            processFiles(Array.from(e.dataTransfer.files), type);
+         }
+      };
+
+      const handleFileChange = (e, type) => {
+        if (e.target.files) {
+           processFiles(Array.from(e.target.files), type);
+        }
+        e.target.value = '';
+      };
+
+      const removeFile = (type, index) => {
+        const removed = task.value.files[type].splice(index, 1)[0];
+        if (removed && removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      };
+
+      const clearFiles = () => {
+        task.value.files.image.forEach(f => { if(f.previewUrl) URL.revokeObjectURL(f.previewUrl); });
+        task.value.files = { image: [], video: [], audio: [] };
+        if (imageInput.value) imageInput.value.value = '';
+        if (videoInput.value) videoInput.value.value = '';
+        if (audioInput.value) audioInput.value.value = '';
+        task.value.errorMsg = '';
+      };
+
+      const loading = ref(false);
+      const result = ref('');
+      const resultType = ref('image'); 
+      const debugConsole = ref('');
+      const seconds = ref(0);
+      let timer = null;
+
+      onMounted(() => {
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => e.preventDefault());
+      });
+
+      const logDebug = (msg) => {
+        const time = new Date().toLocaleTimeString();
+        debugConsole.value = `[${time}] ${msg}\n\n` + debugConsole.value;
+      };
+
+      const submit = async () => {
+        if (!config.value.apiKey) return alert('⚠️ 请设置 API Key！');
+        if (!task.value.prompt && !hasAnyFile.value) return alert('⚠️ 请输入文字提示词！');
+        if (task.value.errorMsg) return alert('⚠️ 存在参数冲突报错，请先处理！');
+
+        loading.value = true;
+        result.value = '';
+        seconds.value = 0;
+        timer = setInterval(() => { seconds.value++ }, 1000);
+
+        try {
+          const base = config.value.baseUrl.replace(/\/$/, '');
+          const endpoint = task.value.mode === 'image' ? '/images/generations' : '/videos/generations';
+          
+          let formData = new FormData();
+          formData.append('model', task.value.model);
+          formData.append('prompt', task.value.prompt);
+
+          if (task.value.mode === 'image') {
+             if (task.value.resolution !== 'default') formData.append('resolution_type', task.value.resolution);
+             formData.append('ratio', task.value.ratio);
+             task.value.files.image.forEach(f => formData.append('images', f));
+          } else {
+             if (task.value.resolution !== 'default') formData.append('video_resolution', task.value.resolution);
+             formData.append('duration', task.value.duration);
+             if (showRatioControl.value) formData.append('ratio', task.value.ratio); 
+             
+             task.value.files.image.forEach(f => formData.append('image', f)); // Multer expected form key
+             task.value.files.video.forEach(f => formData.append('video', f));
+             task.value.files.audio.forEach(f => formData.append('audio', f));
+          }
+
+          logDebug(`=> POST ${base}${endpoint}\nSending HTTP Multipart payload with Data:\n` + 
+              JSON.stringify(Object.fromEntries(formData.entries()), null, 2)
+          );
+
+          const response = await fetch(`${base}${endpoint}`, {
+             method: 'POST',
+             headers: { 'Authorization': `Bearer ${config.value.apiKey}` },
+             body: formData
+          });
+          const resJson = await response.json();
+          logDebug(`<= RESPONSE HTTP ${response.status}\n${JSON.stringify(resJson, null, 2)}`);
+          
+          if (!response.ok || resJson.error) {
+             throw new Error(resJson.error?.message || resJson.error || 'Unknown Server Error');
+          }
+
+          let url = null;
+
+          // 核心轮询逻辑 (Polling Logic)
+          if (resJson.status === 'processing' && resJson.id) {
+             logDebug(`[INFO] 任务已挂起后台。开始轮询获取状态... (ID: ${resJson.id})`);
+             
+             let pollAttempts = 0;
+             while (true) {
+                await new Promise(resolve => setTimeout(resolve, 5000)); // poll every 5s
+                pollAttempts++;
+                logDebug(`[POLL ${pollAttempts}] ${base}/tasks/${resJson.id}`);
+                
+                const pollRes = await fetch(`${base}/tasks/${resJson.id}`, {
+                   headers: { 'Authorization': `Bearer ${config.value.apiKey}` }
+                });
+                const pollData = await pollRes.json();
+                logDebug(`<= RESPONSE HTTP ${pollRes.status}\n${JSON.stringify(pollData, null, 2)}`);
+                
+                if (pollData.status === 'success' && pollData.data && pollData.data[0].url) {
+                   url = pollData.data[0].url;
+                   break;
+                } else if (pollData.status === 'failed') {
+                   throw new Error(pollData.error || '云端生成失败，可能涉及风控');
+                } else if (pollData.status === 'processing') {
+                   // Continue polling
+                   continue;
+                } else {
+                   throw new Error('未知的轮询状态');
+                }
+             }
+          } else {
+             url = resJson.data?.[0]?.url;
+          }
+
+          if (!url) throw new Error("No payload URL received after polling.");
+          if (!url) throw new Error("No payload URL received");
+          
+          result.value = url;
+          resultType.value = (task.value.mode === 'video' || url.includes('.mp4')) ? 'video' : 'image';
+
+        } catch (err) {
+          logDebug(`! FATAL ERROR\n${err.message}`);
+          alert(`请求被拦截或后台错误：\n${err.message}`);
+        } finally {
+          loading.value = false;
+          clearInterval(timer);
+        }
+      };
+
+      return {
+        config, task, availableModels, availableImageResolutions, availableVideoResolutions,
+        availableRatios, durationLimits, showRatioControl, getModelTags,
+        imageInput, videoInput, audioInput, handleFileChange, handleDrop, isDraggingImage, removeFile, clearFiles, currentApiMode, apiModeTag, hasAnyFile,
+        loading, result, resultType, seconds, debugConsole, submit, showDocs
+      }
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

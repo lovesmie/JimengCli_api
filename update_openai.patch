@@ -1,0 +1,48 @@
+--- src/routes/openai.ts
++++ src/routes/openai.ts
+@@ -32,23 +32,32 @@
+ };
+ 
+ /**
+- * 提取 URL 的公共方法
++ * 提取 submit_id
+  */
+-function extractResultUrl(stdout: string, type: 'image' | 'video'): string {
++function extractSubmitId(stdout: string): string {
+   try {
+     const jsonStr = stdout.substring(stdout.indexOf('{'), stdout.lastIndexOf('}') + 1);
+     const result = JSON.parse(jsonStr);
+-    if (type === 'image' && result.result_json?.images?.[0]?.image_url) {
+-      return result.result_json.images[0].image_url;
++    if (result.submit_id) return result.submit_id;
++    if (result.task_id) return result.task_id;
++    if (result.data?.submit_id) return result.data.submit_id;
+-    }
+-    if (type === 'video' && result.result_json?.videos?.[0]?.video_url) {
+-      return result.result_json.videos[0].video_url;
+-    }
+-    throw new Error("Missing url in output JSON\nRaw output: " + stdout);
+   } catch (parseErr) {
+-    const regex = type === 'image' 
+-      ? /https:\/\/[^\s"'<>]+\.(png|jpg|jpeg|webp)(?:\?[^\s"'<>]+)?/i
+-      : /https:\/\/[^\s"'<>]+\.(mp4)(?:\?[^\s"'<>]+)?/i;
+-    const urlMatch = stdout.match(regex); 
+-    if (urlMatch) {
+-       return urlMatch[0];
+-    } else {
+-       throw new Error(`Unable to parse result URL from CLI output. Parse Error: ${(parseErr as Error).message}\nRaw Output: ${stdout.substring(0, 500)}`);
+-    }
++    // Regex fallback
+   }
++  
++  const idMatch = stdout.match(/(?:submit_id|task_id|id)["':\s=]+([a-zA-Z0-9_\-]+)/i);
++  if (idMatch && idMatch[1]) {
++    return idMatch[1];
++  }
++  
++  const plainMatch = stdout.match(/\b([a-fA-F0-9]{16})\b/);
++  if (plainMatch && plainMatch[1]) {
++    return plainMatch[1];
++  }
++  throw new Error("Cannot find submit_id in CLI output.\nRaw Output: " + stdout.substring(0, 500));
+ }

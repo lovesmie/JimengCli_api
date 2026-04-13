@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../data/jimeng.db"
+}
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  key       String   @unique // The "sk-xxx" generated key
+  owner     String   // E.g., user name or project
+  quota     Int?     // Allowed max usage
+  used      Int      @default(0) // Usage count
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]
+}
+
+model JimengAccount {
+  id             String   @id @default(uuid())
+  name           String   @unique // Human-readable identifier like "acc_01"
+  homeDir        String   @unique // Path used as HOME env variable for this account
+  status         String   @default("IDLE") // IDLE, BUSY, OFFLINE, ERROR
+  creditBalance  Int      @default(0) 
+  lastChecked    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tasks          Task[]
+}
+
+model Task {
+  id              String   @id @default(uuid())
+  apiKeyId        String
+  apiKey          ApiKey   @relation(fields: [apiKeyId], references: [id])
+  accountId       String?
+  account         JimengAccount? @relation(fields: [accountId], references: [id])
+  
+  type            String   // text2image, text2video
+  prompt          String
+  jimengSubmitId  String?  // The native submit_id from CLI
+  status          String   @default("PENDING") // PENDING, PROCESSING, SUCCESS, FAILED 
+  resultUrl       String?  // The final outcome URL
+  errorMsg        String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
