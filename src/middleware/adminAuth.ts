@@ -1,15 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
+import bcrypt from 'bcryptjs';
 
 const configDir = path.resolve(__dirname, '../../data');
 if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
 
 const configPath = path.resolve(configDir, 'admin.json');
 
-// Initialize admin password if not exists
+// Initialize admin config if not exists — store bcrypt hash of default password "admin"
 if (!fs.existsSync(configPath)) {
-  fs.writeFileSync(configPath, JSON.stringify({ password: 'admin', token: 'admin_token_' + Date.now() }));
+  const hash = bcrypt.hashSync('admin', 10);
+  fs.writeFileSync(configPath, JSON.stringify({ password: hash, token: 'admin_token_' + Date.now() }));
+} else {
+  // Migrate plaintext password to bcrypt hash on first run after upgrade
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  if (config.password && !config.password.startsWith('$2')) {
+    config.password = bcrypt.hashSync(config.password, 10);
+    fs.writeFileSync(configPath, JSON.stringify(config));
+  }
 }
 
 export const adminAuth = (req: Request, res: Response, next: NextFunction) => {

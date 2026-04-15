@@ -1,0 +1,11 @@
+INFO 2026-04-14T13:38:02+08:00 service.go:199 [RunLogin] start login flow mode=reuse_if_valid port=60713 debug=true logid=2026041413380219216819200188769C3 submit_id=-
+ERROR 2026-04-14T13:38:02+08:00 service.go:359 [fetchAccountSummary] parse auth token failed err=open D:\jimengCli_api\data\accounts\xiaoyue_account_1_1776145082461\.dreamina_cli\credential.json: The system cannot find the file specified. logid=2026041413380219216819200188769C3 submit_id=-
+INFO 2026-04-14T13:38:02+08:00 service.go:250 [runBrowserLogin] start browser login port=60713 debug=true headless=false logid=2026041413380219216819200188769C3 submit_id=-
+ERROR 2026-04-14T13:40:54+08:00 service.go:170 [RequireUsableCredential] require usable credential failed err=未检测到有效登录态，请先执行 dreamina login logid=202604141340541921681920016859F43 submit_id=-
+ERROR 2026-04-14T13:40:54+08:00 root.go:57 [ExecuteArgs] command=dreamina user_credit err=未检测到有效登录态，请先执行 dreamina login logid=202604141340541921681920016859F43 submit_id=-
+ERROR 2026-04-14T13:40:59+08:00 service.go:170 [RequireUsableCredential] require usable credential failed err=未检测到有效登录态，请先执行 dreamina login logid=20260414134059192168192001027794A submit_id=-
+ERROR 2026-04-14T13:40:59+08:00 root.go:57 [ExecuteArgs] command=dreamina user_credit err=未检测到有效登录态，请先执行 dreamina login logid=20260414134059192168192001027794A submit_id=-
+ERROR 2026-04-14T13:41:37+08:00 service.go:170 [RequireUsableCredential] require usable credential failed err=未检测到有效登录态，请先执行 dreamina login logid=2026041413413719216819200100612CB submit_id=-
+ERROR 2026-04-14T13:41:37+08:00 root.go:57 [ExecuteArgs] command=dreamina user_credit err=未检测到有效登录态，请先执行 dreamina login logid=2026041413413719216819200100612CB submit_id=-
+ERROR 2026-04-14T13:48:03+08:00 service.go:331 [waitForLogin] login wait timed out err=等待登录超时，请重试 logid=2026041413380219216819200188769C3 submit_id=-
+ERROR 2026-04-14T13:48:03+08:00 root.go:57 [ExecuteArgs] command=dreamina login err=等待登录超时，请重试 logid=2026041413380219216819200188769C3 submit_id=-

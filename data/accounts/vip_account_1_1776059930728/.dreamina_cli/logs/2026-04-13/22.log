@@ -1,0 +1,4 @@
+ERROR 2026-04-13T22:47:43+08:00 service.go:170 [RequireUsableCredential] require usable credential failed err=未检测到有效登录态，请先执行 dreamina login logid=20260413224743192168192001008E1DD submit_id=-
+ERROR 2026-04-13T22:47:43+08:00 root.go:57 [ExecuteArgs] command=dreamina query_result err=未检测到有效登录态，请先执行 dreamina login logid=20260413224743192168192001008E1DD submit_id=-
+ERROR 2026-04-13T22:47:49+08:00 service.go:170 [RequireUsableCredential] require usable credential failed err=未检测到有效登录态，请先执行 dreamina login logid=20260413224749192168192001100E4BA submit_id=-
+ERROR 2026-04-13T22:47:49+08:00 root.go:57 [ExecuteArgs] command=dreamina query_result err=未检测到有效登录态，请先执行 dreamina login logid=20260413224749192168192001100E4BA submit_id=-

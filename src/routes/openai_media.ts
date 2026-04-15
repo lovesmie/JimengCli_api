@@ -17,6 +17,7 @@ const apiKeyAuth = async (req: Request, res: Response, next: any) => {
   const apiKey = await prisma.apiKey.findUnique({ where: { key: token, isActive: true as any } });
   if (!apiKey) return res.status(401).json({ error: { message: 'Invalid API Key' } });
   (req as any).apiUserId = apiKey.id;
+  (req as any).apiBoundAccountId = apiKey.boundAccountId ?? null;
   next();
 };
 
@@ -27,7 +28,7 @@ const dispatchJimengTask = async (
   commandBuilder: (tempFilePath: string | null) => string,
   tempFilePath: string | null = null
 ) => {
-    const account = await accountService.getIdleAccount();
+    const account = await accountService.getIdleAccount((req as any).apiBoundAccountId);
     if (!account) {
       if (tempFilePath) cleanupTempFile(tempFilePath);
       return res.status(503).json({ error: { message: 'All Dreamina accounts are busy or out of credits. Please try again later.' } });
@@ -77,7 +78,8 @@ const dispatchJimengTask = async (
          where: { id: dbTask.id },
          data: { status: 'FAILED', errorMsg: cmdErr.message }
       });
-      await accountService.releaseAccount(account.id, 'ERROR');
+      const isNoVip = cmdErr.message.includes('高级会员') || cmdErr.message.includes('vip') || cmdErr.message.includes('VIP') || cmdErr.message.includes('member');
+      await accountService.releaseAccount(account.id, isNoVip ? 'NO_VIP' : 'ERROR');
       if (tempFilePath) cleanupTempFile(tempFilePath);
       return res.status(500).json({ error: { message: "Jimeng CLI failed: " + cmdErr.message } });
     }

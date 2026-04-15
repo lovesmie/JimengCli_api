@@ -1,0 +1,2 @@
+ERROR 2026-04-13T23:07:31+08:00 service.go:331 [waitForLogin] login wait timed out err=等待登录超时，请重试 logid=20260413225710192168192001521F16D submit_id=-
+ERROR 2026-04-13T23:07:31+08:00 root.go:57 [ExecuteArgs] command=dreamina login err=等待登录超时，请重试 logid=20260413225710192168192001521F16D submit_id=-

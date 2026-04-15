@@ -33,7 +33,7 @@
       <div class="flex gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
         <div>
           <label class="block text-xs font-bold text-gray-500 mb-1">Base URL</label>
-          <input v-model="config.baseUrl" type="text" class="w-48 border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
+          <input v-model="config.baseUrl" type="text" placeholder="http://服务器IP:3000/v1" class="w-64 border border-gray-300 rounded px-2 py-1.5 text-xs focus:ring-1 focus:ring-indigo-500 outline-none">
         </div>
         <div>
           <label class="block text-xs font-bold text-gray-500 mb-1">API Key</label>
@@ -490,7 +490,7 @@ curl ... -F "image=@face1.jpg" \
 
   createApp({
     setup() {
-      const config = ref({ baseUrl: 'http://localhost:3000/v1', apiKey: '' });
+      const config = ref({ baseUrl: '', apiKey: '' });
       const showDocs = ref(false);
       const task = ref({
         mode: 'image', // 'image' or 'video'

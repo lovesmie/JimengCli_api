@@ -11,15 +11,17 @@ datasource db {
 }
 
 model ApiKey {
-  id        String   @id @default(uuid())
-  key       String   @unique // The "sk-xxx" generated key
-  owner     String   // E.g., user name or project
-  quota     Int?     // Allowed max usage
-  used      Int      @default(0) // Usage count
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tasks     Task[]
+  id              String         @id @default(uuid())
+  key             String         @unique // The "sk-xxx" generated key
+  owner           String         // E.g., user name or project
+  quota           Int?           // Allowed max usage
+  used            Int            @default(0) // Usage count
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  tasks           Task[]
+  boundAccountId  String?        // 绑定的 Jimeng 账号 ID，null = 使用全局池
+  boundAccount    JimengAccount? @relation(fields: [boundAccountId], references: [id])
 }
 
 model JimengAccount {
@@ -32,6 +34,7 @@ model JimengAccount {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   tasks          Task[]
+  boundApiKeys   ApiKey[] // 绑定到此账号的 API Keys
 }
 
 model Task {

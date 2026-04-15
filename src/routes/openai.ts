@@ -17,6 +17,7 @@ const apiKeyAuth = async (req: Request, res: Response, next: any) => {
   const apiKey = await prisma.apiKey.findUnique({ where: { key: token, isActive: true as any } });
   if (!apiKey) return res.status(401).json({ error: { message: 'Invalid API Key' } });
   (req as any).apiUserId = apiKey.id;
+  (req as any).apiBoundAccountId = apiKey.boundAccountId ?? null;
   next();
 };
 
@@ -57,7 +58,7 @@ router.post('/images/generations', apiKeyAuth, upload.array('images', 10), async
       return res.status(400).json({ error: { message: "Either 'prompt' or an 'image' file is required." } });
     }
 
-    const account = await accountService.getIdleAccount();
+    const account = await accountService.getIdleAccount((req as any).apiBoundAccountId);
     if (!account) {
       if (files) files.forEach(f => fs.unlinkSync(f.path));
       return res.status(503).json({ error: { message: 'All Dreamina accounts are busy or out of credits. Please try again later.' } });
@@ -87,7 +88,8 @@ router.post('/images/generations', apiKeyAuth, upload.array('images', 10), async
       await prisma.task.update({ where: { id: dbTask.id }, data: { status: 'PROCESSING', jimengSubmitId: submitId } });
     } catch (cmdErr: any) {
       await prisma.task.update({ where: { id: dbTask.id }, data: { status: 'FAILED', errorMsg: cmdErr.message } });
-      await accountService.releaseAccount(account.id, 'ERROR');
+      const isNoVip = cmdErr.message.includes('高级会员') || cmdErr.message.includes('vip') || cmdErr.message.includes('VIP') || cmdErr.message.includes('member');
+      await accountService.releaseAccount(account.id, isNoVip ? 'NO_VIP' : 'ERROR');
       if (files) files.forEach(f => fs.unlinkSync(f.path));
       return res.status(500).json({ error: { message: "Jimeng CLI failed: " + cmdErr.message } });
     }
@@ -127,7 +129,7 @@ router.post('/videos/generations', apiKeyAuth, upload.fields([{ name: 'image', m
     const hasImages = imageFiles && imageFiles.length > 0;
     const hasAudio = audioFiles && audioFiles.length > 0;
 
-    const account = await accountService.getIdleAccount();
+    const account = await accountService.getIdleAccount((req as any).apiBoundAccountId);
     if (!account) {
       allFiles.forEach(f => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); });
       return res.status(503).json({ error: { message: 'All Dreamina accounts busy' } });
@@ -164,7 +166,8 @@ router.post('/videos/generations', apiKeyAuth, upload.fields([{ name: 'image', m
       await prisma.task.update({ where: { id: dbTask.id }, data: { status: 'PROCESSING', jimengSubmitId: submitId } });
     } catch (cmdErr: any) {
       await prisma.task.update({ where: { id: dbTask.id }, data: { status: 'FAILED', errorMsg: cmdErr.message } });
-      await accountService.releaseAccount(account.id, 'ERROR');
+      const isNoVip = cmdErr.message.includes('高级会员') || cmdErr.message.includes('vip') || cmdErr.message.includes('VIP') || cmdErr.message.includes('member');
+      await accountService.releaseAccount(account.id, isNoVip ? 'NO_VIP' : 'ERROR');
       allFiles.forEach(f => { if (fs.existsSync(f.path)) fs.unlinkSync(f.path); });
       return res.status(500).json({ error: { message: "Jimeng CLI failed: " + cmdErr.message } });
     }
@@ -182,7 +185,7 @@ router.post('/videos/generations', apiKeyAuth, upload.fields([{ name: 'image', m
 
 router.get('/tasks/:id', apiKeyAuth, async (req: Request, res: Response) => {
   try {
-    const taskId = req.params.id;
+    const taskId = req.params.id as string;
     const task = await prisma.task.findUnique({
       where: { id: taskId },
       include: { account: true, apiKey: true }

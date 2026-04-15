@@ -5,6 +5,10 @@ const prisma = new PrismaClient();
 
 let isPolling = false;
 
+// 记录每个任务的连续失败次数（内存级，重启清零）
+const taskErrorCount = new Map<string, number>();
+const MAX_POLL_ERRORS = 10; // 连续失败 10 次（约 100 秒）后自动标记 FAILED
+
 export const pollingDaemon = {
   start() {
     console.log('[🔄] Polling Daemon started. Monitoring PROCESSING tasks every 10 seconds...');
@@ -51,16 +55,30 @@ export const pollingDaemon = {
                   where: { id: task.id },
                   data: { status: 'SUCCESS', resultUrl: finalUrl }
                 });
+                taskErrorCount.delete(task.id);
               } else if (state.status === 'failed' || state.gen_status === 'failed' || state.gen_status === 'fail' || state.status === 2 || stdout.toLowerCase().includes('fail')) {
                 console.log(`[Daemon] Task ${task.id} FAILED.`);
                 await prisma.task.update({
                   where: { id: task.id },
                   data: { status: 'FAILED', errorMsg: stdout.substring(0, 200) }
                 });
+                taskErrorCount.delete(task.id);
               }
             }
           } catch (taskErr) {
-            console.error(`[Daemon] Error checking task ${task.id}:`, taskErr);
+            const errMsg = (taskErr as any)?.message || String(taskErr);
+            const count = (taskErrorCount.get(task.id) || 0) + 1;
+            taskErrorCount.set(task.id, count);
+            console.error(`[Daemon] Error checking task ${task.id} (${count}/${MAX_POLL_ERRORS}):`, errMsg);
+
+            if (count >= MAX_POLL_ERRORS) {
+              console.error(`[Daemon] Task ${task.id} exceeded max retries. Marking as FAILED.`);
+              await prisma.task.update({
+                where: { id: task.id },
+                data: { status: 'FAILED', errorMsg: `轮询连续失败 ${MAX_POLL_ERRORS} 次，最后错误: ${errMsg.substring(0, 300)}` }
+              });
+              taskErrorCount.delete(task.id);
+            }
           }
         }
       } catch (err) {

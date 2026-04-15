@@ -7,7 +7,9 @@ CREATE TABLE "ApiKey" (
     "used" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" DATETIME NOT NULL,
+    "boundAccountId" TEXT,
+    CONSTRAINT "ApiKey_boundAccountId_fkey" FOREIGN KEY ("boundAccountId") REFERENCES "JimengAccount" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
 
 -- CreateTable

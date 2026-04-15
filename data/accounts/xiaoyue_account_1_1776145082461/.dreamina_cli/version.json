@@ -1,0 +1,5 @@
+{
+  "version": "1.3.4",
+  "release_date": "2026-04-10",
+  "release_notes": "优化生图，全能参考命令帮助文案，现在支持linux arm64平台了"
+}

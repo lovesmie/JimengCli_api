@@ -17,12 +17,20 @@ const errorMessage = ref('');
 const successMessage = ref('');
 const authUrlModal = ref('');
 const authModalTitle = ref('');
+const authUrlCopied = ref(false);
 const apiKeyResult = ref('');
 const apiKeyOwner = ref('');
 const apiKeyQuota = ref<number | null>(null);
+const apiKeyBoundAccountId = ref<string>('');
+const showAccountDropdown = ref(false);
 const revealedKeyIds = ref<Set<string>>(new Set());
+const rebindModal = ref<{ show: boolean; keyId: string; keyOwner: string; currentBoundId: string }>({ show: false, keyId: '', keyOwner: '', currentBoundId: '' });
+const rebindNewAccountId = ref<string>('');
 const checkingId = ref<string | null>(null);
 const reloginLoadingId = ref<string | null>(null);
+const importLoginModal = ref<{ show: boolean; accountId: string; accountName: string }>({ show: false, accountId: '', accountName: '' });
+const importLoginJson = ref('');
+const importLoginLoading = ref(false);
 
 const currentTab = ref('accounts');
 
@@ -33,7 +41,7 @@ const headers = () => ({
 
 const doLogin = async () => {
   try {
-    const res = await fetch('http://localhost:3000/admin/sys/login', {
+    const res = await fetch('/admin/sys/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: loginPassword.value })
@@ -58,9 +66,27 @@ const doLogout = () => {
   localStorage.removeItem('admin_token');
 };
 
+const copyAuthUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(authUrlModal.value);
+    authUrlCopied.value = true;
+    setTimeout(() => { authUrlCopied.value = false; }, 2000);
+  } catch {
+    // 降级：选中文本
+    const el = document.createElement('textarea');
+    el.value = authUrlModal.value;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    authUrlCopied.value = true;
+    setTimeout(() => { authUrlCopied.value = false; }, 2000);
+  }
+};
+
 const doUpdatePassword = async () => {
   try {
-    const res = await fetch('http://localhost:3000/admin/sys/password', {
+    const res = await fetch('/admin/sys/password', {
       method: 'POST',
       headers: headers(),
       body: JSON.stringify({ oldPassword: oldPassword.value, newPassword: newPassword.value })
@@ -93,8 +119,10 @@ const authFetch = async (url: string, options: any = {}) => {
 
 const fetchAccounts = async () => {
   try {
-    const res = await authFetch('http://localhost:3000/admin/accounts');
-    accounts.value = await res.json();
+    const res = await authFetch('/admin/accounts');
+    const data = await res.json();
+    console.log('[fetchAccounts]', data);
+    accounts.value = Array.isArray(data) ? data : [];
   } catch (error) {
     console.error("Failed to fetch accounts", error);
   }
@@ -103,7 +131,7 @@ const fetchAccounts = async () => {
 const checkAccount = async (id: string) => {
   checkingId.value = id;
   try {
-    const res = await authFetch(`http://localhost:3000/admin/accounts/${id}/check`, { method: 'POST' });
+    const res = await authFetch(`/admin/accounts/${id}/check`, { method: 'POST' });
     const data = await res.json();
     if (res.ok && data.account) {
       const index = accounts.value.findIndex((a: any) => a.id === id);
@@ -124,7 +152,7 @@ const setupNewAccount = async () => {
   if (!name) return;
   loading.value = true;
   try {
-    const res = await authFetch('http://localhost:3000/admin/accounts/login', {
+    const res = await authFetch('/admin/accounts/login', {
       method: 'POST',
       body: JSON.stringify({ name })
     });
@@ -160,7 +188,7 @@ const reloginAccount = async (id: string, name: string) => {
   authUrlModal.value = '';
   errorMessage.value = '';
   try {
-    const res = await authFetch(`http://localhost:3000/admin/accounts/${id}/relogin`, { method: 'POST' });
+    const res = await authFetch(`/admin/accounts/${id}/relogin`, { method: 'POST' });
     const data = await res.json();
     if (res.ok && data.authUrl) {
       authUrlModal.value = data.authUrl;
@@ -175,9 +203,38 @@ const reloginAccount = async (id: string, name: string) => {
   }
 };
 
+const openImportLogin = (acc: any) => {
+  importLoginJson.value = '';
+  importLoginModal.value = { show: true, accountId: acc.id, accountName: acc.name };
+};
+
+const doImportLogin = async () => {
+  if (!importLoginJson.value.trim()) return alert('请粘贴 JSON 内容');
+  importLoginLoading.value = true;
+  errorMessage.value = '';
+  try {
+    const res = await authFetch(`/admin/accounts/${importLoginModal.value.accountId}/import-login`, {
+      method: 'POST',
+      body: JSON.stringify({ loginJson: importLoginJson.value.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      successMessage.value = `账号 "${importLoginModal.value.accountName}" 登录态导入成功！`;
+      importLoginModal.value.show = false;
+      await fetchAccounts();
+    } else {
+      errorMessage.value = data.error || '导入失败';
+    }
+  } catch (e: any) {
+    errorMessage.value = '导入失败: ' + e.message;
+  } finally {
+    importLoginLoading.value = false;
+  }
+};
+
 const fetchApiKeys = async () => {
   try {
-    const res = await authFetch('http://localhost:3000/admin/apikeys');
+    const res = await authFetch('/admin/apikeys');
     apikeys.value = await res.json();
   } catch (error) {
     console.error("Fetch apikeys failed:", error);
@@ -189,15 +246,16 @@ const generateApiKey = async () => {
   errorMessage.value = '';
   loading.value = true;
   try {
-    const res = await authFetch('http://localhost:3000/admin/apikeys', {
+    const res = await authFetch('/admin/apikeys', {
       method: 'POST',
-      body: JSON.stringify({ owner: apiKeyOwner.value, quota: apiKeyQuota.value })
+      body: JSON.stringify({ owner: apiKeyOwner.value, quota: apiKeyQuota.value, boundAccountId: apiKeyBoundAccountId.value || null })
     });
     const data = await res.json();
     if (res.ok) {
       apiKeyResult.value = data.key;
       apiKeyOwner.value = '';
       apiKeyQuota.value = null;
+      apiKeyBoundAccountId.value = '';
       await fetchApiKeys();
     } else {
       errorMessage.value = data.error || "生成失败";
@@ -215,13 +273,28 @@ const toggleRevealKey = (id: string) => {
   revealedKeyIds.value = s;
 };
 
-const copyKey = (key: string) => {
-  navigator.clipboard.writeText(key).then(() => alert('已复制到剪贴板！'));
+const copyKey = (text: string) => {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => alert('已复制到剪贴板！')).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+};
+const fallbackCopy = (text: string) => {
+  const el = document.createElement('textarea');
+  el.value = text;
+  el.style.position = 'fixed';
+  el.style.opacity = '0';
+  document.body.appendChild(el);
+  el.select();
+  document.execCommand('copy');
+  document.body.removeChild(el);
+  alert('已复制到剪贴板！');
 };
 
 const toggleApiKey = async (id: string) => {
   try {
-    const res = await authFetch(`http://localhost:3000/admin/apikeys/${id}/toggle`, { method: 'PUT' });
+    const res = await authFetch(`/admin/apikeys/${id}/toggle`, { method: 'PUT' });
     const data = await res.json();
     if (res.ok) {
       const index = apikeys.value.findIndex((k: any) => k.id === id);
@@ -235,7 +308,7 @@ const toggleApiKey = async (id: string) => {
 const deleteApiKey = async (id: string, owner: string) => {
   if (!confirm(`确定要删除令牌 "${owner}" 吗？此操作不可撤销。`)) return;
   try {
-    const res = await authFetch(`http://localhost:3000/admin/apikeys/${id}`, { method: 'DELETE' });
+    const res = await authFetch(`/admin/apikeys/${id}`, { method: 'DELETE' });
     if (res.ok) {
       apikeys.value = apikeys.value.filter((k: any) => k.id !== id);
     } else {
@@ -252,9 +325,33 @@ const maskKey = (key: string) => {
   return key.slice(0, 10) + '••••••••••••••••••••' + key.slice(-4);
 };
 
+const openRebindModal = (key: any) => {
+  rebindModal.value = { show: true, keyId: key.id, keyOwner: key.owner, currentBoundId: key.boundAccount?.id || '' };
+  rebindNewAccountId.value = key.boundAccount?.id || '';
+};
+
+const rebindApiKey = async () => {
+  try {
+    const res = await authFetch(`/admin/apikeys/${rebindModal.value.keyId}/rebind`, {
+      method: 'PUT',
+      body: JSON.stringify({ boundAccountId: rebindNewAccountId.value || null })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      const index = apikeys.value.findIndex((k: any) => k.id === rebindModal.value.keyId);
+      if (index !== -1) apikeys.value[index] = { ...apikeys.value[index], ...data };
+      rebindModal.value.show = false;
+    } else {
+      alert('改绑失败: ' + (data.error || '未知错误'));
+    }
+  } catch (e: any) {
+    alert('改绑失败: ' + e.message);
+  }
+};
+
 const initData = () => {
   if (!token.value) return;
-  authFetch('http://localhost:3000/admin/sys/check')
+  authFetch('/admin/sys/check')
     .then(() => {
       fetchAccounts();
       fetchApiKeys();
@@ -299,8 +396,31 @@ onMounted(() => {
           <h3 class="font-extrabold text-xl text-slate-800">🔗 授权链接</h3>
           <p class="text-sm text-slate-600 font-medium">{{ authModalTitle }}</p>
           <a :href="authUrlModal" target="_blank" class="block break-all text-indigo-600 text-sm font-mono bg-indigo-50 p-4 rounded-lg border border-indigo-200 hover:bg-indigo-100 transition">{{ authUrlModal }}</a>
-          <p class="text-xs text-slate-500">👆 点击上方链接在浏览器中打开，完成授权后点击下方按钮刷新状态。</p>
+          <button @click="copyAuthUrl" class="w-full border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 font-bold py-2.5 rounded-xl transition text-sm flex items-center justify-center gap-2">
+            <span>{{ authUrlCopied ? '✅ 已复制！' : '📋 复制授权链接' }}</span>
+          </button>
+          <p class="text-xs text-slate-500">👆 点击上方链接在浏览器中打开，或复制后发给账号持有人。完成授权后点击下方按钮刷新状态。</p>
           <button @click="authUrlModal = ''; fetchAccounts()" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl">✅ 确认已完成授权</button>
+        </div>
+      </div>
+
+      <!-- JSON 导入登录弹窗 -->
+      <div v-if="importLoginModal.show" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 space-y-5">
+          <h3 class="font-extrabold text-xl text-slate-800">📥 JSON 导入登录态</h3>
+          <p class="text-sm text-slate-600">账号：<span class="font-bold">{{ importLoginModal.accountName }}</span></p>
+          <ol class="text-xs text-slate-500 space-y-1 list-decimal list-inside">
+            <li>先登录即梦：<a href="https://jimeng.jianying.com/ai-tool/login" target="_blank" class="text-indigo-500 underline">https://jimeng.jianying.com/ai-tool/login</a></li>
+            <li>然后打开（用 random_secret_key 替换）：<br><span class="font-mono break-all">https://jimeng.jianying.com/dreamina/cli/v1/dreamina_cli_login?aid=513695&random_secret_key=<b>KEY</b>&web_version=7.5.0</span></li>
+            <li>复制页面全部 JSON，粘贴到下方</li>
+          </ol>
+          <textarea v-model="importLoginJson" rows="8" class="w-full border border-slate-300 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" placeholder='粘贴完整 JSON...'></textarea>
+          <div class="flex gap-3">
+            <button @click="importLoginModal.show = false" class="flex-1 border border-slate-300 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-50">取消</button>
+            <button @click="doImportLogin" :disabled="importLoginLoading" class="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold py-3 rounded-xl">
+              {{ importLoginLoading ? '⏳ 导入中...' : '✅ 确认导入' }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -342,6 +462,9 @@ onMounted(() => {
               <button @click="reloginAccount(acc.id, acc.name)" :disabled="reloginLoadingId === acc.id" class="text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 rounded-lg transition flex items-center gap-1.5">
                 {{ reloginLoadingId === acc.id ? '⏳' : '🔗' }} 重新授权
               </button>
+              <button @click="openImportLogin(acc)" class="text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg transition flex items-center gap-1.5">
+                📥 JSON 导入
+              </button>
             </div>
           </div>
         </div>
@@ -355,6 +478,39 @@ onMounted(() => {
           <div class="flex flex-wrap gap-3">
             <input v-model="apiKeyOwner" placeholder="拥有者标识 (如 client_01)" class="flex-1 border border-slate-300 px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-w-[180px]" />
             <input v-model.number="apiKeyQuota" type="number" placeholder="额度上限 (留空=无限)" class="w-52 border border-slate-300 px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+            <!-- 自定义账号下拉 -->
+            <div class="relative">
+              <button type="button" @click="showAccountDropdown = !showAccountDropdown" class="flex items-center gap-2 border border-slate-300 bg-white px-4 py-2.5 rounded-lg text-sm hover:border-indigo-400 focus:ring-2 focus:ring-indigo-500 outline-none min-w-[220px] justify-between">
+                <span v-if="!apiKeyBoundAccountId" class="text-slate-500">🔀 不绑定（自动分配）</span>
+                <template v-else>
+                  <template v-for="acc in accounts" :key="acc.id">
+                    <span v-if="acc.id === apiKeyBoundAccountId">
+                      <span>{{ acc.status === 'IDLE' ? '✅' : acc.status === 'BUSY' ? '⏳' : '❌' }}</span>
+                      <span class="font-semibold text-slate-800 ml-1">{{ acc.name }}</span>
+                      <span class="text-slate-400 ml-1 text-xs">{{ acc.creditBalance ?? '?' }} 积分</span>
+                    </span>
+                  </template>
+                </template>
+                <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              <div v-if="showAccountDropdown" class="absolute left-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-72 overflow-hidden">
+                <div @click="apiKeyBoundAccountId = ''; showAccountDropdown = false" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                  <span class="text-lg">🔀</span>
+                  <div>
+                    <div class="text-sm font-semibold text-slate-700">不绑定</div>
+                    <div class="text-xs text-slate-400">系统自动从账号池分配</div>
+                  </div>
+                </div>
+                <div v-for="acc in accounts" :key="acc.id" @click="apiKeyBoundAccountId = acc.id; showAccountDropdown = false" class="flex items-center gap-3 px-4 py-3 hover:bg-indigo-50 cursor-pointer" :class="apiKeyBoundAccountId === acc.id ? 'bg-indigo-50' : ''">
+                  <span class="text-lg">{{ acc.status === 'IDLE' ? '✅' : acc.status === 'BUSY' ? '⏳' : '❌' }}</span>
+                  <div>
+                    <div class="text-sm font-semibold text-slate-800">{{ acc.name }}</div>
+                    <div class="text-xs text-slate-400">{{ acc.creditBalance ?? '?' }} 积分 · {{ acc.status }}</div>
+                  </div>
+                  <span v-if="apiKeyBoundAccountId === acc.id" class="ml-auto text-indigo-600 font-bold text-sm">✓</span>
+                </div>
+              </div>
+            </div>
             <button @click="generateApiKey" :disabled="loading" class="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow transition">签发令牌</button>
           </div>
           <div v-if="apiKeyResult" class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
@@ -371,13 +527,14 @@ onMounted(() => {
               <tr>
                 <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">拥有者</th>
                 <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">API Key</th>
+                <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">绑定账号</th>
                 <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">用量</th>
                 <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">状态</th>
                 <th class="text-left px-6 py-3 font-bold text-slate-500 text-xs uppercase tracking-wider">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              <tr v-if="apikeys.length === 0"><td colspan="5" class="text-center py-12 text-slate-400">暂无令牌，请签发</td></tr>
+              <tr v-if="apikeys.length === 0"><td colspan="6" class="text-center py-12 text-slate-400">暂无令牌，请签发</td></tr>
               <tr v-for="key in apikeys" :key="key.id" class="hover:bg-slate-50 transition">
                 <td class="px-6 py-4 font-semibold text-slate-800">{{ key.owner }}</td>
                 <td class="px-6 py-4">
@@ -387,17 +544,44 @@ onMounted(() => {
                     <button @click="copyKey(key.key)" class="text-slate-400 hover:text-indigo-600 text-sm px-1 py-0.5 rounded transition" title="复制">📋</button>
                   </div>
                 </td>
-                <td class="px-6 py-4 text-slate-500 text-xs">{{ key.usageCount || 0 }} / {{ key.quota || '∞' }}</td>
-                <td class="px-6 py-4"><span class="text-xs font-bold px-2 py-1 rounded-full" :class="key.isEnabled !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">{{ key.isEnabled !== false ? '启用' : '停用' }}</span></td>
+                <td class="px-6 py-4">
+                  <span v-if="key.boundAccount" class="text-xs font-semibold text-indigo-700 bg-indigo-50 px-2 py-1 rounded-full">🔒 {{ key.boundAccount.name }}</span>
+                  <span v-else class="text-xs text-slate-400">🔀 自动分配</span>
+                </td>
+                <td class="px-6 py-4 text-slate-500 text-xs">{{ key.used || 0 }} / {{ key.quota || '∞' }}</td>
+                <td class="px-6 py-4"><span class="text-xs font-bold px-2 py-1 rounded-full" :class="key.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'">{{ key.isActive ? '启用' : '停用' }}</span></td>
                 <td class="px-6 py-4">
                   <div class="flex items-center gap-2">
-                    <button @click="toggleApiKey(key.id)" class="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition">{{ key.isEnabled !== false ? '停用' : '启用' }}</button>
+                    <button @click="toggleApiKey(key.id)" class="text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition">{{ key.isActive ? '停用' : '启用' }}</button>
+                    <button @click="openRebindModal(key)" class="text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition">改绑</button>
                     <button @click="deleteApiKey(key.id, key.owner)" class="text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-lg transition">删除</button>
                   </div>
                 </td>
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- ========== REBIND MODAL ========== -->
+      <div v-if="rebindModal.show" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+        <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md p-6 space-y-5">
+          <div class="flex items-center justify-between">
+            <h3 class="font-black text-slate-800 text-lg">🔁 修改绑定账号</h3>
+            <button @click="rebindModal.show = false" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+          </div>
+          <p class="text-sm text-slate-500">令牌拥有者：<span class="font-bold text-slate-700">{{ rebindModal.keyOwner }}</span></p>
+          <div>
+            <label class="block text-sm font-bold text-slate-700 mb-2">选择新的绑定账号</label>
+            <select v-model="rebindNewAccountId" class="w-full border border-slate-300 px-4 py-2.5 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white">
+              <option value="">🔀 不绑定（自动分配公共池）</option>
+              <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.status === 'IDLE' ? '✅' : acc.status === 'BUSY' ? '⏳' : '❌' }} {{ acc.name }}（{{ acc.creditBalance ?? '?' }} 积分）</option>
+            </select>
+          </div>
+          <div class="flex gap-3 justify-end pt-2">
+            <button @click="rebindModal.show = false" class="px-5 py-2.5 rounded-lg text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition">取消</button>
+            <button @click="rebindApiKey" class="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition shadow">确认改绑</button>
+          </div>
         </div>
       </div>
 

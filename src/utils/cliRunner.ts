@@ -49,7 +49,8 @@ export const runJimengCommand = async (
     // 拦截 Windows 主目录
     env.USERPROFILE = absoluteHome;
     // 某些系统特定的用户临时目录也强行隔离
-    env.APPDATA = absoluteHome; 
+    env.APPDATA = absoluteHome;
+    env.LOCALAPPDATA = absoluteHome;
   }
 
   try {
