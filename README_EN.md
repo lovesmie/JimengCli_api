@@ -69,6 +69,11 @@ If deploying on Ubuntu/CentOS:
 * `bin/`: (**DO NOT COMMIT**) Official Jimeng CLI binaries.
 * `docs/`: Guides and manuals.
 
+## 🤝 Community & Support
+
+Welcome to join our QQ Group for technical discussions, API integrations, and workflow automation setups:
+* **QQ Group**: `691588657` (Chinese language group)
+
 ## 📄 License
 Released under the [MIT License](LICENSE).
 *Author: XiaoYue <43854695@qq.com>*
