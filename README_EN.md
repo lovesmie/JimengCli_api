@@ -24,7 +24,7 @@ To get this API running, it fundamentally relies on the **"Official Jimeng CLI"*
 1. **Get Code**: Download/unzip this project or use `git clone`.
 2. **Run**: Double-click **`start.bat`**.
 3. **Access Dashboard**: Open `http://localhost:3000` in your browser.
-4. **Admin Login**: **Default password is `admin123`**. Please change it immediately!
+4. **Admin Login**: **Default password is `admin`**. Please change it immediately!
 
 ---
 

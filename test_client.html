@@ -281,14 +281,14 @@
     <div class="lg:col-span-7 flex flex-col gap-4">
       
       <!-- 媒体展柜 -->
-      <div class="bg-white rounded-2xl shadow border border-gray-200 flex flex-col h-[520px] relative overflow-hidden group">
-        <div class="absolute top-0 w-full bg-gradient-to-b from-black/50 to-transparent p-4 z-10 opaitcy-0 group-hover:opacity-100 transition-opacity">
+      <div class="bg-black rounded-2xl shadow-xl border border-gray-800 flex flex-col h-[520px] relative overflow-hidden group transition-all duration-300">
+        <div class="absolute top-0 w-full bg-gradient-to-b from-black/80 to-transparent p-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
            <h2 class="text-white font-bold text-sm drop-shadow-md"><i class="fa-solid fa-tv"></i> 媒体展柜区</h2>
         </div>
         
-        <div class="flex-1 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] bg-gray-100 flex items-center justify-center p-2 relative">
+        <div class="flex-1 bg-[#0d1117] relative min-h-0">
           
-          <div v-if="!result && !loading" class="text-center text-gray-400">
+          <div v-if="!result && !loading" class="h-full flex flex-col items-center justify-center text-center text-gray-500">
             <i class="fa-solid fa-film text-4xl mb-3 opacity-30"></i>
             <p class="text-sm font-medium">配置左侧参数后，一键生成属于你的作品。</p>
           </div>
@@ -303,7 +303,7 @@
             <p class="text-xs text-gray-500 mt-1">服务器已挂起进程等待回调</p>
           </div>
 
-          <div v-if="result" class="w-full h-full flex items-center justify-center p-4">
+          <div v-if="result" class="absolute inset-0 flex items-center justify-center p-4">
             <template v-if="resultType === 'video'">
               <video :src="result" controls autoplay loop class="max-w-full max-h-full object-contain rounded-lg shadow-xl ring-1 ring-gray-900/10"></video>
             </template>
@@ -315,14 +315,14 @@
         </div>
 
         <!-- 展柜底部动作拦 -->
-        <div v-if="result" class="bg-white border-t border-gray-200 p-3 flex justify-between items-center z-10">
-           <span class="text-xs text-gray-500 select-all max-w-[60%] truncate" :title="result">{{ result }}</span>
-           <a :href="result" download target="_blank" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-4 py-1.5 rounded-lg transition"><i class="fa-solid fa-download"></i> 下载媒体</a>
+        <div v-if="result" class="bg-[#161b22] border-t border-gray-800 p-3 flex justify-between items-center z-10 shrink-0">
+           <span class="text-xs text-gray-400 select-all max-w-[60%] truncate" :title="result">{{ result }}</span>
+           <a :href="result" download target="_blank" class="text-sm font-bold text-indigo-400 hover:text-indigo-300 bg-indigo-900/40 border border-indigo-500/30 px-4 py-1.5 rounded-lg transition"><i class="fa-solid fa-download"></i> 下载媒体</a>
         </div>
       </div>
 
       <!-- JSON/Debug 控制台 -->
-      <div class="bg-[#0d1117] rounded-2xl shadow-lg border border-gray-800 p-4 relative flex flex-col" style="height:260px">
+      <div class="bg-[#0d1117] rounded-2xl shadow-lg border border-gray-800 p-4 relative flex flex-col shrink-0" style="height:260px">
         <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between shrink-0">
           <span><i class="fa-solid fa-terminal text-green-500"></i> 系统通信日志分析台</span>
           <button @click="debugConsole = ''" class="hover:text-white transition"><i class="fa-solid fa-eraser"></i></button>

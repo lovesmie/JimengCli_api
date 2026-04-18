@@ -3,7 +3,7 @@ chcp 65001 >nul
 title 即梦 - 打包发布版（预构建）
 
 set PACK_DIR=%~dp0_pack_temp
-set OUT_ZIP=%~dp0jimeng-deploy.zip
+set OUT_ZIP=%~dp0jimengCli_api-v1.0.0-windows-x64.zip
 
 echo ============================================
 echo   即梦 OpenAI 调度服务 - 打包发布版
@@ -57,6 +57,10 @@ robocopy "%~dp0bin"               "%PACK_DIR%\bin"               /e /njh /njs /n
 :: 配置文件
 copy "%~dp0package.json"          "%PACK_DIR%\" >nul
 copy "%~dp0start.bat"             "%PACK_DIR%\" >nul
+copy "%~dp0README.md"             "%PACK_DIR%\" >nul
+copy "%~dp0README_EN.md"          "%PACK_DIR%\" >nul
+copy "%~dp0LICENSE"               "%PACK_DIR%\" >nul
+if exist "%~dp0test_client.html" copy "%~dp0test_client.html" "%PACK_DIR%\" >nul
 
 :: data 目录：只保留空目录结构和 admin.json
 mkdir "%PACK_DIR%\data\accounts" >nul
@@ -73,7 +77,7 @@ echo DATABASE_URL="file:../data/jimeng.db" > "%PACK_DIR%\.env"
 if exist "%~dp0docs" robocopy "%~dp0docs" "%PACK_DIR%\docs" /e /njh /njs /ndl >nul
 
 :: ── 6. 压缩 ──────────────────────────────────
-echo [→] 压缩为 jimeng-deploy.zip...
+echo [→] 压缩为 jimengCli_api-v1.0.0-windows-x64.zip...
 powershell -NoProfile -Command "Compress-Archive -Path '%PACK_DIR%\*' -DestinationPath '%OUT_ZIP%' -Force"
 
 :: ── 7. 清理临时目录 ──────────────────────────
@@ -85,6 +89,6 @@ cd /d "%~dp0"
 call npm install >nul 2>&1
 
 echo.
-echo [✓] 打包完成：jimeng-deploy.zip
+echo [✓] 打包完成：jimengCli_api-v1.0.0-windows-x64.zip
 echo     解压到目标机器，双击 start.bat 即可直接启动（无需构建）
 pause
