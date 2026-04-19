@@ -69,6 +69,11 @@ If deploying on Ubuntu/CentOS:
 * `bin/`: (**DO NOT COMMIT**) Official Jimeng CLI binaries.
 * `docs/`: Guides and manuals.
 
+## 🔄 Changelog
+
+**v1.0.1 (2026-04-20)**
+- 🐛 **Bug Fix**: Fixed a multimodal routing bug in the OpenAI standard video generation API. When only images (without audio/video files) were uploaded and a multimodal model like `seedance2.0` was specified, the router incorrectly fell back to the standard multiframe/single-image mode (resulting in `3.0 fast`). The logic now strictly adheres to the requested model, enforcing the multimodal generation channel regardless of the attachment types, greatly improving API compatibility and scheduling accuracy.
+
 ## 🤝 Community & Support
 
 Welcome to join our QQ Group for technical discussions, API integrations, and workflow automation setups:

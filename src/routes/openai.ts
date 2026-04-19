@@ -490,7 +490,7 @@ router.post('/videos/generations', apiKeyAuth, upload.fields([{ name: 'image', m
     const hasVideos = orderedMedia.some(item => item.type === 'video');
     const hasMedia = orderedMedia.length > 0;
     const imageCount = imageMedia.length;
-    const useMultiModal = hasVideos || hasAudio;
+    const useMultiModal = MULTIMODAL_MODELS.has(model) ? hasMedia : (hasVideos || hasAudio);
     const useFrames2Video = !useMultiModal && imageCount === 2 && FRAMES2VIDEO_MODELS.has(model);
     const useMultiFrame2Video = !useMultiModal && imageCount >= 2 && !useFrames2Video;
     const useImage2Video = !useMultiModal && imageCount === 1;
